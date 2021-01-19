@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Test Lambda Function in OE Integration to check connectivity from APIGateway"
+Resources:
+  OEIntginternalalbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "oeintg-internal-alb-ingress-sg"
+      GroupDescription: "Security group for Internal loadbalancer"
+      VpcId: !ImportValue oe-integrations-vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+  OEIntgLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "OEIntgTestlambda-ingress-sg"
+      GroupDescription: "Security group for lambda"
+      VpcId: !ImportValue oe-integrations-vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !Ref OEIntginternalalbSecurityGroup
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+  OEIntgTestLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: "oe-integrations-TestLambda"
+      Handler: "index.handler"
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              // TODO implement
+              const response = {
+                  statusCode: 200,
+                  body: JSON.stringify('Hello Worl Test Lambda!'),
+              };
+              return response;
+          };
+      #Role: !Sub arn:aws:iam::${AWS::AccountId}:role/OE-Intg-LambdaRole
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSCodePipelineServiceRole-us-east-2-open-exchange-Dev-Infrastr
+      Runtime: "nodejs12.x"
+      Timeout: "100"
+      TracingConfig:
+        Mode: "PassThrough"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref OEIntgLambdaSecurityGroup
+        SubnetIds:
+          - !ImportValue oe-integrations-privatesubnetA
+          - !ImportValue oe-integrations-privatesubnetB
+Outputs:
+  OEIntgTestLambdaFunction:
+    Description: 'OEIntgTestLambdaFunction.'
+    Value:
+      'Fn::GetAtt': [OEIntgTestLambdaFunction, Arn]
+    Export:
+      Name: OEIntgTestLambdaFunction
+  OEIntegrationInternalALBSecurityGrp:
+    Description: A reference to the OE Integration ALB Security Group
+    Value: !Ref OEIntginternalalbSecurityGroup
+    Export:
+      Name: oeintegrationsinternal:alb:securitygrp

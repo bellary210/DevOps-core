@@ -1,0 +1,27 @@
+Resources:
+  InternetGateway:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties:
+      Tags:
+      - Key: Name
+        Value: oe-integrations-internetgateway
+  EgressOnlyInternetGateway:
+    Type: 'AWS::EC2::EgressOnlyInternetGateway'
+    Properties:
+      VpcId: !ImportValue oe-integrations-vpc
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !ImportValue oe-integrations-vpc
+      InternetGatewayId: !Ref InternetGateway
+Outputs:
+  InternetGateway:
+    Description: 'InternetGateway.'
+    Value: !Ref InternetGateway
+    Export:
+      Name: oe-integrations-internetgateway
+  EgressOnlyInternetGateway:
+    Description: 'EgressInternetGateway.'
+    Value: !Ref EgressOnlyInternetGateway
+    Export:
+      Name: EgressOnlyInternetGateway

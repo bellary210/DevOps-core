@@ -1,0 +1,73 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "An example template with an IAM role for a Lambda state machine."
+Resources:
+  loadbalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "loadbalancer-ingress-sg"
+      GroupDescription: "Security group for loadbalancer"
+      VpcId: !ImportValue oe-integrations-vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+  lambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: "lambda-ingress-sg"
+      GroupDescription: "Security group for lambda"
+      VpcId: !ImportValue oe-integrations-vpc
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        SourceSecurityGroupId: !Ref loadbalancerSecurityGroup
+      SecurityGroupEgress:
+      - IpProtocol: tcp
+        FromPort: 80
+        ToPort: 80
+        CidrIp: 0.0.0.0/0
+  MyLambdaFunction:
+    Type: "AWS::Lambda::Function"
+    Properties:
+      FunctionName: "oe-integrations-lambda"
+      Handler: "index.handler"
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+              // TODO implement
+              const response = {
+                  statusCode: 200,
+                  body: JSON.stringify('Hello from Lambda!'),
+              };
+              return response;
+          };
+      Role: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSCodePipelineServiceRole-us-east-2-open-exchange-Dev-Infrastr
+      Runtime: "nodejs12.x"
+      Timeout: "25"
+      TracingConfig:
+        Mode: "PassThrough"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref lambdaSecurityGroup
+        SubnetIds:
+          - !ImportValue oe-integrations-privatesubnetA
+          - !ImportValue oe-integrations-privatesubnetB
+Outputs:
+  MyLambdaFunction:
+    Description: 'MyLambdaFunction.'
+    Value:
+      'Fn::GetAtt': [ MyLambdaFunction, Arn ]
+    Export:
+      Name: MyLambdaFunction
+  loadbalancerSecurityGroup:
+    Description: 'Security group for loadbalancer.'
+    Value: !Ref loadbalancerSecurityGroup
+    Export:
+      Name: loadbalancerSecurityGroup

@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >
+  This is the seed stack for the OE Connect for this account.
+Parameters:
+  AccountType:
+    Description: The type of the account.
+    Type: String
+    AllowedValues:
+      - dev
+      - feature-branch
+      - qa
+      - stage
+      - prod
+
+Conditions:
+  CreateBoilerplateResources: !Equals [ !Ref AccountType, feature-branch ]
+
+Mappings:
+  BranchMap:
+    dev:
+      Branch: development
+    feature-branch:
+      Branch: feature-OI-1
+    qa:
+      Branch: qa
+    stage:
+      Branch: stage
+    prod:
+      Branch: master
+Resources:
+  AccountTypeParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /oeintegrations/accounttype
+      Description: The account type for this OE Connect account.
+      Type: String
+      Value: !Sub ${AccountType}
+
+  EnvironmentGitBranchParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /oeintegrations/cd/git/branch
+      Description: !Sub The git branch in which OE Connect CD uses for this account (${AccountType}-${AWS::Region}).
+      Type: String
+      Value: !FindInMap [BranchMap, !Ref AccountType, Branch]
+  ## Roles & Policies are getting added SourcePath: String     # optional
+  CodePipelineBucket:
+      Type: AWS::S3::Bucket
+      DeletionPolicy: Retain
+      UpdateReplacePolicy: Retain
+      Properties:
+        BucketName: !Sub oe-int-cicd-${AccountType}-${AWS::Region}-${AWS::AccountId}
+        AccessControl: Private
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        BucketEncryption:
+          ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: AES256
+        VersioningConfiguration:
+          Status: Enabled
+
+  CodePipelineBucketPolicy:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket:
+          Ref: "CodePipelineBucket"
+        PolicyDocument:
+          Statement:
+            -
+              Action:
+                - "s3:*"
+              Effect: "Deny"
+              Resource:
+                - !Join ['', ['arn:aws:s3:::', !Ref CodePipelineBucket, '/*']]
+              Principal: "*"
+              Condition:
+                Bool:
+                  aws:SecureTransport:
+                    - "false"
+  CodeBuildIAMPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        Description: !Sub "Common OE Connect CodeBuild access to IAM (${AccountType}/${AWS::Region})"
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Action:
+                - iam:AttachRolePolicy
+                - iam:CreatePolicy
+                - iam:CreatePolicyVersion
+                - iam:CreateRole
+                - iam:DeletePolicy
+                - iam:DeletePolicyVersion
+                - iam:DeleteRole
+                - iam:DeleteRolePolicy
+                - iam:DetachRolePolicy
+                - iam:GetRole
+                - iam:PassRole
+                - iam:PutRolePolicy
+                - iam:GetPolicy
+                - iam:ListPolicyVersions
+                - iam:UpdateRoleDescription
+                - iam:CreateServiceLinkedRole
+              Effect: Allow
+              Resource: '*'
+  CodeBuildSSMParamterPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        Description: !Sub "Common OE Connect CodeBuild access to SSM Parameters (${AccountType}/${AWS::Region})"
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Action:
+                - ssm:DeleteParameter
+                - ssm:DeleteParameters
+                - ssm:GetParameter
+                - ssm:GetParameters
+                - ssm:GetParametersByPath
+                - ssm:LabelParameterVersion
+                - ssm:PutParameter
+              Effect: Allow
+              Resource: '*'
+  CodeBuildEC2Policy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        Description: !Sub "Common OE Connect CodeBuild access to EC2/VPC (${AccountType}/${AWS::Region})"
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Action:
+                - ec2:CreateNetworkInterface
+                - ec2:CreateNetworkInterfacePermission
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeDhcpOptions
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DescribeSecurityGroups
+                - ec2:DescribeSubnets
+                - ec2:DescribeVpcs
+              Effect: Allow
+              Resource: '*'
+  CodeBuildTestReportPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        Description: !Sub "Common OE Connect CodeBuild access to create test reports (${AccountType}/${AWS::Region})"
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Action:
+                - codebuild:CreateReportGroup
+                - codebuild:CreateReport
+                - codebuild:UpdateReport
+                - codebuild:BatchPutTestCases
+                - codebuild:BatchPutCodeCoverages
+              Effect: Allow
+              Resource: '*'
+  CodeBuildCloudFormationPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        Description: !Sub "Common OE Connect CodeBuild access to CloudFormation (${AccountType}/${AWS::Region})"
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Action:
+                - cloudformation:*
+              Effect: Allow
+              Resource:
+                - !Sub 'arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/*'
+  OEConnectInfrastructureSecretPolicy:
+      Type: AWS::IAM::ManagedPolicy
+      Properties:
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Action:
+                - secretsmanager:Describe*
+                - secretsmanager:Get*
+                - secretsmanager:List*
+              Effect: Allow
+              Resource: "*"
+Outputs:
+  BECodePipelineBucket:
+    Description: The OE Connect CodePipeline bucket used for this environment.
+    Value: !Ref CodePipelineBucket
+    Export:
+      Name: oeconnect:codepipeline:backend:s3:bucket
+  CodeBuildIAMPolicy:
+    Description: A reference to the OE Connect CodeBuild shared IAM policy
+    Value: !Ref CodeBuildIAMPolicy
+    Export:
+      Name: oeconnect:codebuild:policy:iam
+  CodeBuildSSMParamterPolicy:
+    Description: A reference to the OE Connect CodeBuild shared SSM Parameter policy
+    Value: !Ref CodeBuildSSMParamterPolicy
+    Export:
+      Name: oeconnect:codebuild:policy:ssm
+  CodeBuildEC2Policy:
+    Description: A reference to the OE Connect CodeBuild shared EC2 policy
+    Value: !Ref CodeBuildEC2Policy
+    Export:
+      Name: oeconnect:codebuild:policy:ec2
+  CodeBuildTestReportPolicy:
+    Description: A reference to the OE Connect CodeBuild shared Test Report policy
+    Value: !Ref CodeBuildTestReportPolicy
+    Export:
+      Name: oeconnect:codebuild:policy:report
+  CodeBuildCloudFormationPolicy:
+    Description: A reference to the OE Connect CodeBuild shared CloudFormation policy
+    Value: !Ref CodeBuildCloudFormationPolicy
+    Export:
+      Name: oeconnect:codebuild:policy:cfn
+  OEConnectInfrastructureSecretPolicy:
+    Description: A reference to the OE Connect shared Secret policy
+    Value: !Ref OEConnectInfrastructureSecretPolicy
+    Export:
+      Name: oeconnect:codebuild:policy:secret

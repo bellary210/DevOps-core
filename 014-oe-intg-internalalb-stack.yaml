@@ -1,0 +1,51 @@
+Resources:
+  OEIntgLambdaTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      TargetType: lambda
+      Targets:
+        - Id: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:oe-integrations-TestLambda"
+  OEIntegrationALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: OEIntgLambdaPermission
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: OEIntgLambdaTargetGroup
+      LoadBalancerArn:
+          Ref: OEIntgInternalLoadBalancer
+      Port: 80
+      Protocol: HTTP
+  OEIntgInternalLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internal
+      Type: application
+      Subnets:
+        - !ImportValue oe-integrations-privatesubnetA
+        - !ImportValue oe-integrations-privatesubnetB
+      SecurityGroups:
+        - !ImportValue oeintegrationsinternal:alb:securitygrp
+  OEIntgLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:oe-integrations-TestLambda"
+      Action: lambda:InvokeFunction
+      Principal: elasticloadbalancing.amazonaws.com
+Outputs:
+  OEIntegrationInternalLoadBalancer:
+    Description: A reference to the OEConnect network load balancer.
+    Value: !Ref OEIntgInternalLoadBalancer
+    Export:
+      Name: oeintegrationsinternal:alb
+  OEIntegrationsDNSName:
+    Description: A reference to the OE Integration Application load balancer's DNS name.
+    Value: !GetAtt OEIntgInternalLoadBalancer.DNSName
+    Export:
+      Name: oeintegrations:alb:dns
+  OEIntegrationInternalALBListner:
+    Description: A reference to the OEIntegration ALB Listner.
+    Value: !Ref OEIntegrationALBListener
+    Export:
+      Name: oeintegrationsinternal:alb:listner

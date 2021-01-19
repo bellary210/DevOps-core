@@ -1,0 +1,11 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      nodejs: 10
+    commands:
+      chmod +x 01_infrastructure_stack_script.sh
+  build:
+    commands:
+      - sh 01_infrastructure_stack_script.sh

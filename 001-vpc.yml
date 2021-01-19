@@ -1,0 +1,16 @@
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.192.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: oe-integrations-vpc
+Outputs:
+  VPC:
+    Description: ID of VPC
+    Value: !Ref VPC
+    Export:
+      Name: oe-integrations-vpc

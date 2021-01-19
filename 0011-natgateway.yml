@@ -1,0 +1,39 @@
+Resources:
+  VPCGatewayAttachment:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      VpcId: !ImportValue oe-integrations-vpc
+      InternetGatewayId: !ImportValue oe-integrations-internetgateway
+  NatGateway1EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway2EIP:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway1EIP.AllocationId
+      SubnetId: !ImportValue oe-integrations-pubsubnetA
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatGateway2EIP.AllocationId
+      SubnetId: !ImportValue oe-integrations-pubsubnetB
+Outputs:
+  NatGateway1:
+    Description: 'NatGateway1 for OE-Integrations.'
+    Value: !Ref NatGateway1
+    Export:
+      Name: oe-integrations-natgateway1
+  NatGateway2:
+    Description: 'NatGateway2 for OE-Integrations.'
+    Value: !Ref NatGateway2
+    Export:
+      Name: oe-integrations-natgateway2

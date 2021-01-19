@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: CICD IAC Pipeline Stack for dev
+Parameters:
+  AccountType:
+    Description: The type of the account.
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /oeintegrations/accounttype
+  BranchName:
+    Description: The Git branch to watch
+    Type: 'AWS::SSM::Parameter::Value<String>'
+    Default: /oeintegrations/cd/git/branch
+Resources:
+  CodeBuildProject:
+    Type: 'AWS::CodeBuild::Project'
+    Properties:
+      Name: oe-integrations-lambdastack
+      Description: CICD IAC Pipeline LambdaStack
+      Source:
+        BuildSpec: buildspec.yml
+        InsecureSsl: false
+        Type: CODEPIPELINE
+      Artifacts:
+        EncryptionDisabled: false
+        Name: oe-integrations-lambdastack
+        Packaging: NONE
+        Type: CODEPIPELINE
+      Cache:
+        Type: NO_CACHE
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/amazonlinux2-x86_64-standard:3.0'
+        ImagePullCredentialsType: CODEBUILD
+        PrivilegedMode: true
+        Type: LINUX_CONTAINER
+      ServiceRole: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/codebuild-oe-integration-build-project-service-role
+      TimeoutInMinutes: 60
+      QueuedTimeoutInMinutes: 480
+      EncryptionKey: !Sub 'arn:aws:kms:${AWS::Region}:${AWS::AccountId}:alias/aws/s3'
+      BadgeEnabled: false
+      LogsConfig:
+        CloudWatchLogs:
+          Status: ENABLED
+          GroupName: oeintegrations-lambdastack
+          StreamName: oe-integrations-lambdastack
+        S3Logs:
+          Status: DISABLED
+          EncryptionDisabled: false
+  ArtifactStore:
+    Type: 'AWS::S3::Bucket'
+    Properties: {}
+  DeploymentPipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      ArtifactStore:
+        Type: S3
+        Location:
+          Ref: ArtifactStore
+      Name: oeintegrations-lambdastack
+      RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSCodePipelineServiceRole-us-east-2-open-exchange-Dev-Infrastr
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: ApplicationSource
+              ActionTypeId:
+                Category: Source
+                Owner: ThirdParty
+                Version: 1
+                Provider: GitHub
+              OutputArtifacts:
+                - Name: oeintegrationsOutput
+              Configuration:
+                Branch: !Sub ${BranchName}
+                OAuthToken: "{{resolve:secretsmanager:oeintegration/github/access:SecretString:ttoken}}"
+                Owner: Knowledgevision
+                PollForSourceChanges: false
+                Repo: OE-Integration-Infrastructure
+              RunOrder: 1
+        - Name: Build
+          Actions:
+            - Name: CodeBuild
+              InputArtifacts:
+                - Name: oeintegrationsOutput
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Version: 1
+                Provider: CodeBuild
+              OutputArtifacts:
+                - Name: IACAppArtifact-oe-integrations
+              Configuration:
+                ProjectName: !Ref CodeBuildProject
+              RunOrder: 1
+        - Name: ApplyLambdaStack
+          Actions:
+            - Name: Lambda
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              InputArtifacts:
+                - Name: oeintegrationsOutput
+              OutputArtifacts: []
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSCodePipelineServiceRole-us-east-2-open-exchange-Dev-Infrastr
+                StackName: oe-integrations-lambdastack
+                TemplatePath: oeintegrationsOutput::007-lambdastack.yml
+              RunOrder: 1
+        - Name: ApplyLoadbalancerStack
+          Actions:
+            - Name: loadbalancer
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              InputArtifacts:
+                - Name: oeintegrationsOutput
+              OutputArtifacts: []
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSCodePipelineServiceRole-us-east-2-open-exchange-Dev-Infrastr
+                StackName: oe-integrations-loadbalancerStack
+                TemplatePath: oeintegrationsOutput::006-loadbalancer.yml
+              RunOrder: 1
+        - Name: ApplyOEIntgTestLambdaStack
+          Actions:
+            - Name: OEIntegrationTestLambda
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              InputArtifacts:
+                - Name: oeintegrationsOutput
+              OutputArtifacts: []
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSCodePipelineServiceRole-us-east-2-open-exchange-Dev-Infrastr
+                StackName: oe-integrations-testlambdastack
+                TemplatePath: oeintegrationsOutput::010-oe-intg-testlambda-stack.yaml
+              RunOrder: 1
+        - Name: ApplyOEIntgInternalALBStack
+          Actions:
+            - Name: OEIntegrationInternalLoadbalancer
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              InputArtifacts:
+                - Name: oeintegrationsOutput
+              OutputArtifacts: []
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSCodePipelineServiceRole-us-east-2-open-exchange-Dev-Infrastr
+                StackName: oe-integrations-internalalbstack
+                TemplatePath: oeintegrationsOutput::014-oe-intg-internalalb-stack.yaml
+              RunOrder: 1
+        - Name: ApplyOEIntgAPIGatewayStack
+          Actions:
+            - Name: OEIntegrationPublicApiGateway
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CloudFormation
+                Version: "1"
+              InputArtifacts:
+                - Name: oeintegrationsOutput
+              OutputArtifacts: []
+              Configuration:
+                ActionMode: CREATE_UPDATE
+                RoleArn: !Sub arn:aws:iam::${AWS::AccountId}:role/service-role/AWSCodePipelineServiceRole-us-east-2-open-exchange-Dev-Infrastr
+                StackName: oe-integrations-apigatewaystack
+                TemplatePath: oeintegrationsOutput::018-oe-intg-apigateway-stack.yaml
+              RunOrder: 1
+  PipelineWebhook:
+    Type: 'AWS::CodePipeline::Webhook'
+    Properties:
+      Authentication: GITHUB_HMAC
+      AuthenticationConfiguration:
+        SecretToken: "{{resolve:secretsmanager:oeintegration/github/access:SecretString:ttoken}}"
+      Filters:
+        - JsonPath: $.ref
+          MatchEquals: 'refs/heads/{Branch}'
+      TargetPipeline: !Ref DeploymentPipeline
+      TargetAction: ApplicationSource
+      Name: PipelineWebhook
+      TargetPipelineVersion: !GetAtt
+        - DeploymentPipeline
+        - Version
+      RegisterWithThirdParty: true

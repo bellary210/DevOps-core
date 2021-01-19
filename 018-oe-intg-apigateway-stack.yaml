@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: OE Integrations APIGateway
+
+Parameters:
+  apiGatewayName:
+    Type: String
+    Default: OEIntegration-APIGateway
+
+Resources:
+  OEIntegrationVpcLink:
+    Type: AWS::ApiGatewayV2::VpcLink
+    Properties:
+      Name: !Sub ${AWS::StackName}-OEIntg-VpcLink
+      SubnetIds:
+        - !ImportValue oe-integrations-privatesubnetA
+        - !ImportValue oe-integrations-privatesubnetB
+
+  OEIntgAPIGatewayRestAPI:
+    Type: 'AWS::ApiGatewayV2::Api'
+    Properties:
+      ProtocolType: HTTP
+      Description: "OE Integration API Gateway Resource"
+      Name: !Ref apiGatewayName
+
+  OEIntgAPIGatewayMethod:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref OEIntgAPIGatewayRestAPI
+      Description: API Gateway to Private ALB integration
+      ConnectionId: !Ref OEIntegrationVpcLink
+      ConnectionType: VPC_LINK
+      PassthroughBehavior: WHEN_NO_MATCH
+      TimeoutInMillis: 29000
+      IntegrationMethod: ANY
+      IntegrationType: HTTP_PROXY
+      PayloadFormatVersion: "1.0"
+      IntegrationUri: !ImportValue oeintegrationsinternal:alb:listner
+      #IntegrationUri: "arn:aws:elasticloadbalancing:us-east-2:311206062661:listener/app/oe-in-OEInt-1H8BZ82LUC6MI/d501ca7210b60e05/5a72afa0b1aff6d2"
+
+  OEIntgApiGatewayStage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      DeploymentId: !Ref OEIntgAPIGatewayDeployment
+      Description: API Gateway Private Intg Stage
+      ApiId: !Ref OEIntgAPIGatewayRestAPI
+      StageName: $default
+
+  OEIntgAPIGatewayDeployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn: OEIntgAPIGatewayMethod
+    Properties:
+      Description: APIGateway Private Integration deployment
+      ApiId: !Ref OEIntgAPIGatewayRestAPI
+
+  OEIntgAPIGatewayResource:
+    Type: AWS::ApiGatewayV2::Route
+    DependsOn:
+      - OEIntgAPIGatewayRestAPI
+      - OEIntgAPIGatewayMethod
+    Properties:
+      ApiId: !Ref OEIntgAPIGatewayRestAPI
+      RouteKey: ANY /
+      Target: !Join
+        - /
+        - - integrations
+          - !Ref OEIntgAPIGatewayMethod

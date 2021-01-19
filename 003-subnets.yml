@@ -1,0 +1,87 @@
+Resources:
+  VPCCidrBlock:
+    Type: 'AWS::EC2::VPCCidrBlock'
+    Properties:
+      AmazonProvidedIpv6CidrBlock: true
+      VpcId: !ImportValue oe-integrations-vpc
+  SubnetAPublic:
+    DependsOn: VPCCidrBlock
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      #AssignIpv6AddressOnCreation: true # TODO can not be set if MapPublicIpOnLaunch is true as well
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.192.1.0/24'
+      #Ipv6CidrBlock: !Select [0, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 4, 64]]
+      MapPublicIpOnLaunch: true
+      VpcId: !ImportValue oe-integrations-vpc
+      Tags:
+      - Key: Name
+        Value: oe-integrations-pubsubnetA
+  SubnetAPrivate:
+    DependsOn: VPCCidrBlock
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      #AssignIpv6AddressOnCreation: false
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: '10.192.2.0/24'
+      #Ipv6CidrBlock: !Select [1, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 4, 64]]
+      VpcId: !ImportValue oe-integrations-vpc
+      Tags:
+      - Key: Name
+        Value: oe-integrations-privatesubnetA
+  SubnetBPublic:
+    DependsOn: VPCCidrBlock
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      #AssignIpv6AddressOnCreation: true # TODO can not be set if MapPublicIpOnLaunch is true as well
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.192.3.0/24'
+      #Ipv6CidrBlock: !Select [2, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 4, 64]]
+      MapPublicIpOnLaunch: true
+      VpcId: !ImportValue oe-integrations-vpc
+      Tags:
+      - Key: Name
+        Value: oe-integrations-pubsubnetB
+  SubnetBPrivate:
+    DependsOn: VPCCidrBlock
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      #AssignIpv6AddressOnCreation: false
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: '10.192.4.0/24'
+      #Ipv6CidrBlock: !Select [3, !Cidr [!Select [0, !GetAtt 'VPC.Ipv6CidrBlocks'], 4, 64]]
+      VpcId: !ImportValue oe-integrations-vpc
+      Tags:
+      - Key: Name
+        Value: oe-integrations-privatesubnetB
+Outputs:
+  SubnetsPublic:
+    Description: 'Subnets public.'
+    Value: !Join [',', [!Ref SubnetAPublic, !Ref SubnetBPublic]]
+    Export:
+      Name: !Sub '${AWS::StackName}-SubnetsPublic'
+  SubnetsPrivate:
+    Description: 'Subnets private.'
+    Value: !Join [',', [!Ref SubnetAPrivate, !Ref SubnetBPrivate]]
+    Export:
+      Name: !Sub '${AWS::StackName}-SubnetsPrivate'
+  SubnetAPublic:
+    Description: 'Subnet A public.'
+    Value: !Ref SubnetAPublic
+    Export:
+      Name: oe-integrations-pubsubnetA
+  SubnetAPrivate:
+    Description: 'Subnet A private.'
+    Value: !Ref SubnetAPrivate
+    Export:
+      Name: oe-integrations-privatesubnetA
+  SubnetBPublic:
+    Description: 'Subnet B public.'
+    Value: !Ref SubnetBPublic
+    Export:
+     Name: oe-integrations-pubsubnetB
+  SubnetBPrivate:
+    Description: 'Subnet B private.'
+    Value: !Ref SubnetBPrivate
+    Export:
+      Name: oe-integrations-privatesubnetB

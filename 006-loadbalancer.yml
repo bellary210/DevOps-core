@@ -1,0 +1,37 @@
+Resources:
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      TargetType: lambda
+      Targets:
+        - Id: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:oe-integrations-lambda"
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    DependsOn: myLambdaPermission
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn:
+            Ref: TargetGroup
+      LoadBalancerArn:
+          Ref: ApplicationLoadBalancer
+      Port: 80
+      Protocol: HTTP
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Subnets:
+        - !ImportValue oe-integrations-pubsubnetA
+        - !ImportValue oe-integrations-pubsubnetB
+      SecurityGroups:
+        - !ImportValue loadbalancerSecurityGroup
+  myLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Sub "arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:oe-integrations-lambda"
+      Action: lambda:InvokeFunction
+      Principal: elasticloadbalancing.amazonaws.com
+Outputs:
+  DNSName:
+    Value: !GetAtt ApplicationLoadBalancer.DNSName

@@ -1,0 +1,7 @@
+version: 0.2
+
+
+phases:
+  build:
+    commands:
+      - sh 01_infrastructure_stack_script.sh
